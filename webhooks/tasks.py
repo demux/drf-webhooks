@@ -1,32 +1,32 @@
 import importlib
 import logging
 from contextlib import suppress
-from typing import Type
+from typing import TYPE_CHECKING, Type
 from uuid import UUID, uuid4
 
 import httpx
 import pendulum
 import xmltodict
+from conf.celery import app
 from django.db import models
 from django.utils import timezone
-from drf_camel_case.render import CamelCaseJSONRenderer
 from pytimeparse.timeparse import timeparse
 from rest_framework import serializers
 from rest_framework.renderers import BaseRenderer
-from rest_framework_xml.renderers import XMLRenderer
-
-from conf.celery import app
 
 from .config import conf
 from .models import Webhook, WebhookLogEntry
 from .serializers import WebhookEventSerializer
 
+if TYPE_CHECKING:
+    from .utils import ModelSerializerWebhook
+
 logger = logging.getLogger(__name__)
 
-content_type_renderer_map = {
-    'application/json': CamelCaseJSONRenderer,
-    'application/xml': XMLRenderer,
-}
+
+def load_object_from_string(string: str) -> object:
+    module_path, class_name = string.rsplit(".", 1)
+    return getattr(importlib.import_module(module_path), class_name)
 
 
 @app.task
@@ -34,6 +34,7 @@ def dispatch_webhook_event(
     webhook_id: str,
     event: str,
     owner_id: int,
+    model_serializer_webhook_module,
     object_id: str | None = None,
     data=None,
 ):
@@ -56,7 +57,13 @@ def dispatch_webhook_event(
     )
     serializer.is_valid(raise_exception=True)
 
+    msw: ModelSerializerWebhook = load_object_from_string(model_serializer_webhook_module)
+
     content_type = webhook.target_content_type
+    content_type_renderer_map = {
+        'application/json': msw.json_renderer_class or load_object_from_string(conf.DEFAULT_JSON_RENDERER_CLASS),
+        'application/xml': msw.xml_renderer_class or load_object_from_string(conf.DEFAULT_XML_RENDERER_CLASS),
+    }
     renderer: BaseRenderer = content_type_renderer_map[content_type]()
     req_content = renderer.render(serializer.data)
 
@@ -122,13 +129,13 @@ def dispatch_serializer_webhook_event(
     event: str,
     owner_id: int,
     instance_id: int | str,
+    model_serializer_webhook_module: str,
     serializer_class_module: str | None,
 ):
     data = None
 
     if serializer_class_module:
-        module_path, class_name = serializer_class_module.rsplit(".", 1)
-        serializer_class: Type[serializers.ModelSerializer] = getattr(importlib.import_module(module_path), class_name)
+        serializer_class: Type[serializers.ModelSerializer] = load_object_from_string(serializer_class_module)
 
         model_class: Type[models.Model] = serializer_class.Meta.model
         try:
@@ -139,7 +146,14 @@ def dispatch_serializer_webhook_event(
 
         data = serializer_class(instance=instance).data
 
-    return dispatch_webhook_event(webhook_id, event, owner_id, str(instance_id), data)
+    return dispatch_webhook_event(
+        webhook_id,
+        event,
+        owner_id,
+        str(instance_id),
+        data,
+        model_serializer_webhook_module,
+    )
 
 
 @app.task

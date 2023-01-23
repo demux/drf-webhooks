@@ -15,10 +15,11 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db import models
 from inflection import underscore
 from rest_framework import serializers
+from rest_framework.renderers import BaseRenderer
 
 from webhooks.models import Webhook
 
-from .config import REGISTERED_WEBHOOK_CHOICES
+from .config import REGISTERED_WEBHOOK_CHOICES, conf
 from .tasks import dispatch_serializer_webhook_event
 
 logger = logging.getLogger(__name__)
@@ -77,6 +78,8 @@ SignalModelInstanceBaseMap = dict[
 
 class ModelSerializerWebhook(metaclass=ModelSerializerWebhookMeta):
     serializer_class: Type[serializers.ModelSerializer]
+    json_renderer_class: Type[BaseRenderer] | None
+    xml_renderer_class: Type[BaseRenderer] | None
     base_name: str = ''
 
     create: bool = True
@@ -146,8 +149,12 @@ class ModelSerializerWebhook(metaclass=ModelSerializerWebhookMeta):
     def serializer_module_path(self):
         return f"{self.serializer_class.__module__}.{self.serializer_class.__name__}"
 
+    @property
+    def own_module_path(self):
+        return f'{self.__class__.__module__}.{self.__class__.__name__}'
+
     def get_owner(self, instance: models.Model) -> models.Model:
-        return instance.owner  # FIXME: Configurable default
+        return getattr(instance, conf.OWNER_FIELD)
 
     def get_signal_model_instance_base_getters(self) -> SignalModelInstanceBaseMap:
         return self.signal_model_instance_base_getters
@@ -171,7 +178,7 @@ class ModelSerializerWebhook(metaclass=ModelSerializerWebhookMeta):
             return
 
         webhook_ids = Webhook.objects.filter(
-            owner_id=owner.id,  # FIXME: Configurable field name
+            owner_id=owner.id,
             events__contains=[event],
         ).values_list('id', flat=True)
 
@@ -183,6 +190,7 @@ class ModelSerializerWebhook(metaclass=ModelSerializerWebhookMeta):
                     event,
                     owner.id,
                     str(instance.pk),
+                    self.own_module_path,
                     self.serializer_module_path if cud != "deleted" else None,
                 ),
             )
