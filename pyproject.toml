@@ -17,6 +17,7 @@ pendulum = "^2.1.2"
 pytimeparse = "^1.1.8"
 djangorestframework-xml = "^2.0.0"
 xmltodict = "^0.13.0"
+celery = "^5.2.7"
 
 [tool.poetry.dev-dependencies]
 black = "^22.12.0"
@@ -24,6 +25,11 @@ isort = "^5.11.4"
 pytest = "^7.2.1"
 pytest-httpx = "^0.21.3"
 ipython = "^8.8.0"
+pytest-django = "^4.5.2"
+django-environ = "^0.9.0"
+dj-database-url = "^1.2.0"
+psycopg2 = "^2.9.5"
+djangorestframework-camel-case = "^1.4.2"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
@@ -31,11 +37,10 @@ build-backend = "poetry.core.masonry.api"
 
 
 [tool.pytest.ini_options]
-addopts = "--vcr-record-mode=none --ds=conf.settings.test"
+addopts = "--ds=example.settings"
 filterwarnings = [
   "ignore::DeprecationWarning",
   "ignore::PendingDeprecationWarning",
-  "ignore::cryptography.utils.CryptographyDeprecationWarning",
 ]
 markers = [
   "integration",

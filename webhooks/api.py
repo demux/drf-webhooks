@@ -1,8 +1,11 @@
+import swapper
 from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from .models import Webhook
+from . import models as webhook_models
+
+Webhook: webhook_models.AbstractWebhook = swapper.load_model("webhooks", "Webhook")
 
 
 class WebhookSerializer(serializers.ModelSerializer):

@@ -1,18 +1,24 @@
 import json
 
 import pytest
+from django.contrib.auth import get_user_model
 from pytest_httpx import HTTPXMock
 
-from webhooks.utils import ModelSerializerWebhook, webhook_signal_session
 from webhooks.models import Webhook
+from webhooks.utils import ModelSerializerWebhook, webhook_signal_session
 
 from ..config import REGISTERED_WEBHOOK_CHOICES
-from .models import LevelOne, LevelOneSide, LevelThree, LevelTwo, WebhookOwner
+from .models import LevelOne, LevelOneSide, LevelThree, LevelTwo
 from .serializers import (
     LevelOneSideSerializer,
     LevelThreeSerializer,
     LevelTwoSerializer,
 )
+
+
+@pytest.fixture(scope='session')
+def celery_config():
+    return {'task_always_eager': True}
 
 
 def test_serializer_webhook_getters_not_implemented():
@@ -82,7 +88,7 @@ def test_serializer_webhook_events(db, httpx_mock: HTTPXMock):
 
     try:
         with webhook_signal_session():
-            owner = WebhookOwner.objects.create(name="owner")
+            owner = get_user_model().objects.create()
 
             httpx_mock.add_response()
 

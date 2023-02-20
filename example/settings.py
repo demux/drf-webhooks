@@ -12,10 +12,16 @@ https://docs.djangoproject.com/en/4.1/ref/settings/
 
 from pathlib import Path
 
+import dj_database_url
+import environ
+
+env = environ.Env()
+env.read_env()
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'not-secret'
-DEBUG = True
+DEBUG = env.bool('DEBUG', True)
 ALLOWED_HOSTS = ["*"]
 
 # Application definition
@@ -26,6 +32,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'webhooks',
+    'webhooks.tests',
 ]
 
 MIDDLEWARE = [
@@ -33,10 +41,29 @@ MIDDLEWARE = [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
+    'webhooks.middleware.WebhooksMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+WEBHOOKS = {
+    'DEFAULT_JSON_RENDERER_CLASS': 'djangorestframework_camel_case.render.CamelCaseJSONRenderer',
+    'LOG_RETENTION': env.str('WEBHOOKS_LOG_RETENTION', '2 weeks'),
+}
+
+CELERY_BEAT_SCHEDULE = {
+    'clean-webhook-log': {
+        'task': 'webhooks.tasks.auto_clean_log',
+        'schedule': 60,
+        'options': {'expires': 10},
+    },
+}
+
+CELERY_BROKER_URL = env.str('CELERY_BROKER_URL', '')
+if not CELERY_BROKER_URL:
+    CELERY_BROKER_URL = None
+    CELERY_TASK_ALWAYS_EAGER = True
 
 ROOT_URLCONF = 'example.urls'
 
@@ -53,7 +80,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
             ],
         },
-    },
+    }
 ]
 
 WSGI_APPLICATION = 'example.wsgi.application'
@@ -62,12 +89,20 @@ WSGI_APPLICATION = 'example.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.1/ref/settings/#databases
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': dj_database_url.parse(
+        env.str(
+            'DATABASE_URL',
+            'postgres://postgres@localhost/drf-webhooks-example',
+        )
+    ),
 }
 
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
+    }
+}
 
 # Password validation
 # https://docs.djangoproject.com/en/4.1/ref/settings/#auth-password-validators
@@ -89,3 +124,15 @@ STATIC_URL = 'static/'
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.1/ref/settings/#default-auto-field
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+REST_FRAMEWORK = {
+    'DEFAULT_RENDERER_CLASSES': (
+        'djangorestframework_camel_case.render.CamelCaseJSONRenderer',
+        'djangorestframework_camel_case.render.CamelCaseBrowsableAPIRenderer',
+    ),
+    'DEFAULT_PARSER_CLASSES': (
+        'djangorestframework_camel_case.parser.CamelCaseFormParser',
+        'djangorestframework_camel_case.parser.CamelCaseMultiPartParser',
+        'djangorestframework_camel_case.parser.CamelCaseJSONParser',
+    ),
+}

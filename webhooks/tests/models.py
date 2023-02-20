@@ -1,13 +1,10 @@
+from django.contrib.auth import get_user_model
 from django.db import models
-
-
-class WebhookOwner(models.Model):
-    name = models.CharField(max_length=100) 
 
 
 class LevelOne(models.Model):
     name = models.CharField(max_length=100)
-    owner = models.ForeignKey(WebhookOwner, on_delete=models.CASCADE)
+    owner = models.ForeignKey(get_user_model(), on_delete=models.CASCADE)
 
     def __str__(self) -> str:
         return f"LevelOne(id={self.id}, name={self.name})"

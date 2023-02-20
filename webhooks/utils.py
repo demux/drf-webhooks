@@ -11,20 +11,22 @@ from typing import (
     TypedDict,
 )
 
+import swapper
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import models
 from inflection import underscore
 from rest_framework import serializers
 from rest_framework.renderers import BaseRenderer
 
-from webhooks.models import Webhook
-
+from . import models as webhook_models
 from .config import REGISTERED_WEBHOOK_CHOICES, conf
 from .tasks import dispatch_serializer_webhook_event
 
 logger = logging.getLogger(__name__)
 
 WebhookCUD = Literal["created", "updated", "deleted"]
+
+Webhook: webhook_models.AbstractWebhook = swapper.load_model("webhooks", "Webhook")
 
 
 class Signal(NamedTuple):
@@ -78,8 +80,8 @@ SignalModelInstanceBaseMap = dict[
 
 class ModelSerializerWebhook(metaclass=ModelSerializerWebhookMeta):
     serializer_class: Type[serializers.ModelSerializer]
-    json_renderer_class: Type[BaseRenderer] | None
-    xml_renderer_class: Type[BaseRenderer] | None
+    json_renderer_class: Type[BaseRenderer] | None = None
+    xml_renderer_class: Type[BaseRenderer] | None = None
     base_name: str = ''
 
     create: bool = True
@@ -190,8 +192,9 @@ class ModelSerializerWebhook(metaclass=ModelSerializerWebhookMeta):
                     event,
                     owner.id,
                     str(instance.pk),
-                    self.own_module_path,
                     self.serializer_module_path if cud != "deleted" else None,
+                    self.json_renderer_class,
+                    self.xml_renderer_class,
                 ),
             )
             tasks.append(task)

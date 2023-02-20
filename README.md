@@ -1,12 +1,8 @@
 # Django Rest Framework - Webhooks
-
-## Configurable webhooks based on DRF Serializers
-
-**NOTE:** The project is extracted from a bigger project.  
-The plan is to create an independent python package that can be used in any Django project and extended to fit the needs of the codebase.
+**Configurable webhooks based on DRF Serializers**
 
 ## Goals:
-- [x] Use existing DRF Serializers from REST API to serialize data in webhooks  
+- [x] Use existing DRF Serializers from REST API to serialize data in webhooks
     - [x] Consistent data formatting
     - [x] Reusable OpenAPI schemas
 - [x] Configurable webhooks that simply work *(by way of django signals magic)* without the developer having to keep track of where to trigger them

@@ -6,16 +6,17 @@ from uuid import UUID, uuid4
 
 import httpx
 import pendulum
+import swapper
 import xmltodict
-from conf.celery import app
+from celery import shared_task
 from django.db import models
 from django.utils import timezone
 from pytimeparse.timeparse import timeparse
 from rest_framework import serializers
 from rest_framework.renderers import BaseRenderer
 
+from . import models as webhook_models
 from .config import conf
-from .models import Webhook, WebhookLogEntry
 from .serializers import WebhookEventSerializer
 
 if TYPE_CHECKING:
@@ -24,19 +25,24 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+Webhook: webhook_models.AbstractWebhook = swapper.load_model("webhooks", "Webhook")
+WebhookLogEntry: webhook_models.AbstractWebhookLogEntry = swapper.load_model("webhooks", "WebhookLogEntry")
+
+
 def load_object_from_string(string: str) -> object:
     module_path, class_name = string.rsplit(".", 1)
     return getattr(importlib.import_module(module_path), class_name)
 
 
-@app.task
+@shared_task
 def dispatch_webhook_event(
     webhook_id: str,
     event: str,
     owner_id: int,
-    model_serializer_webhook_module,
     object_id: str | None = None,
-    data=None,
+    data: None | dict = None,
+    json_renderer_class: None | str = None,
+    xml_renderer_class: None | str = None,
 ):
     webhook = Webhook.objects.get(id=webhook_id)
     if data is None:
@@ -57,13 +63,12 @@ def dispatch_webhook_event(
     )
     serializer.is_valid(raise_exception=True)
 
-    msw: ModelSerializerWebhook = load_object_from_string(model_serializer_webhook_module)
-
     content_type = webhook.target_content_type
     content_type_renderer_map = {
-        'application/json': msw.json_renderer_class or load_object_from_string(conf.DEFAULT_JSON_RENDERER_CLASS),
-        'application/xml': msw.xml_renderer_class or load_object_from_string(conf.DEFAULT_XML_RENDERER_CLASS),
+        'application/json': load_object_from_string(json_renderer_class or conf.DEFAULT_JSON_RENDERER_CLASS),
+        'application/xml': load_object_from_string(xml_renderer_class or conf.DEFAULT_XML_RENDERER_CLASS),
     }
+
     renderer: BaseRenderer = content_type_renderer_map[content_type]()
     req_content = renderer.render(serializer.data)
 
@@ -123,14 +128,15 @@ def dispatch_webhook_event(
     return res
 
 
-@app.task
+@shared_task
 def dispatch_serializer_webhook_event(
     webhook_id: str,
     event: str,
     owner_id: int,
     instance_id: int | str,
-    model_serializer_webhook_module: str,
     serializer_class_module: str | None,
+    json_renderer_class: None | str = None,
+    xml_renderer_class: None | str = None,
 ):
     data = None
 
@@ -152,11 +158,12 @@ def dispatch_serializer_webhook_event(
         owner_id,
         str(instance_id),
         data,
-        model_serializer_webhook_module,
+        json_renderer_class,
+        xml_renderer_class,
     )
 
 
-@app.task
+@shared_task
 def auto_clean_log():
     log_retention = conf.get("LOG_RETENTION")
     if not log_retention:
@@ -164,13 +171,3 @@ def auto_clean_log():
     log_retention = timeparse(log_retention, "minutes")
     cutoff_dt = pendulum.now().subtract(minutes=log_retention)
     WebhookLogEntry.objects.filter(req_dt__lt=cutoff_dt).delete()
-
-
-@app.on_after_finalize.connect
-def setup_periodic_tasks(sender, **kwargs):
-    if conf.get("LOG_RETENTION"):
-        sender.add_periodic_task(
-            60,  # Run every minute
-            auto_clean_log.s(),
-            expires=10,  # Expires in 10 sec
-        )

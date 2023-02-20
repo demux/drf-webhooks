@@ -1,9 +1,11 @@
 from dataclasses import dataclass
+
 from django.conf import settings
 
 # These two live outside of the WEBHOOKS setting
 # WEBHOOKS_WEBHOOK_MODEL
 # WEBHOOKS_WEBHOOKLOGENTRY_MODEL
+
 
 @dataclass
 class WebhooksConfig:
@@ -13,6 +15,6 @@ class WebhooksConfig:
     OWNER_FIELD: str = 'owner'
 
 
-conf = WebhooksConfig(getattr(settings, 'WEBHOOKS', {}))
+conf = WebhooksConfig(**getattr(settings, 'WEBHOOKS', {}))
 
 REGISTERED_WEBHOOK_CHOICES = {}
