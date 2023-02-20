@@ -8,7 +8,7 @@ from webhooks.models import Webhook
 from webhooks.utils import ModelSerializerWebhook, webhook_signal_session
 
 from ..config import REGISTERED_WEBHOOK_CHOICES
-from .models import LevelOne, LevelOneSide, LevelThree, LevelTwo
+from .models import LevelOne, LevelOneSide, LevelThree, LevelTwo, Many
 from .serializers import (
     LevelOneSideSerializer,
     LevelThreeSerializer,
@@ -62,6 +62,7 @@ def test_serializer_webhook_define_success():
             LevelOne: lambda x: x.level_two_set.all(),
             LevelOneSide: lambda x: x.one.level_two_set.all(),
             LevelThree: lambda x: [x.parent],
+            Many: lambda x: [two for one in x.level_ones.all() for two in one.leveltwo_set.all()],
         }
 
     try:
@@ -81,6 +82,7 @@ def test_serializer_webhook_events(db, httpx_mock: HTTPXMock):
             LevelOne: lambda x: x.leveltwo_set.all(),
             LevelOneSide: lambda x: x.one.leveltwo_set.all(),
             LevelThree: lambda x: [x.parent],
+            Many: lambda x: [two for one in x.level_ones.all() for two in one.leveltwo_set.all()],
         }
 
         def get_owner(self, instance):
@@ -124,18 +126,25 @@ def test_serializer_webhook_events(db, httpx_mock: HTTPXMock):
             three2_id = three2.id
 
         with webhook_signal_session():
-            one.delete()
+            many = Many.objects.create(name="Many")
+            many.level_ones.add(one)
+            many_id = many.id
 
-        assert len(httpx_mock.get_requests()) == 6
+        with webhook_signal_session():
+            one.delete()
 
         # for req in httpx_mock.get_requests():
         #     print(json.dumps(json.loads((req.content)), indent=2))
+
+        assert len(httpx_mock.get_requests()) == 8
 
         (
             level_two__created,
             level_two2__created,
             level_two__updated,
             level_two2__updated,
+            m2m__updated,
+            m2m_2__updated,
             level_two__deleted,
             level_two2__deleted,
         ) = [json.loads(r.content) for r in httpx_mock.get_requests()]
@@ -156,14 +165,26 @@ def test_serializer_webhook_events(db, httpx_mock: HTTPXMock):
         assert level_two__updated["objectId"] == str(two.id)
         assert level_two__updated["payload"]["name"] == "updated name"
         assert level_two__updated["payload"]["parent"]["id"] == one_id
+        assert level_two__updated["payload"]["parent"]["many"] == []
         assert level_two__updated["payload"]["parent"]["side"]["id"] == side_id
 
         assert level_two2__updated["event"] == "test.level_two.updated"
         assert level_two2__updated["objectId"] == str(two2.id)
         assert level_two2__updated["payload"]["name"] == "more two"
         assert level_two2__updated["payload"]["parent"]["id"] == one_id
+        assert level_two2__updated["payload"]["parent"]["many"] == []
         assert level_two2__updated["payload"]["parent"]["side"]["id"] == side_id
         assert level_two2__updated["payload"]["levelthreeSet"][0]["id"] == three2_id
+
+        assert m2m__updated["event"] == "test.level_two.updated"
+        assert m2m__updated["objectId"] == str(two.id)
+        assert m2m__updated["payload"]["parent"]["many"][0]["id"] == many_id
+        assert len(m2m__updated["payload"]["parent"]["many"]) == 1
+
+        assert m2m_2__updated["event"] == "test.level_two.updated"
+        assert m2m_2__updated["objectId"] == str(two2.id)
+        assert m2m_2__updated["payload"]["parent"]["many"][0]["id"] == many_id
+        assert len(m2m_2__updated["payload"]["parent"]["many"]) == 1
 
         assert level_two__deleted["event"] == "test.level_two.deleted"
         assert level_two__deleted["objectId"] == str(two.id)

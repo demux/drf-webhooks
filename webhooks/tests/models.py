@@ -32,3 +32,11 @@ class LevelThree(models.Model):
 
     def __str__(self) -> str:
         return f"LevelThree(id={self.id}, name={self.name})"
+
+
+class Many(models.Model):
+    name = models.CharField(max_length=100)
+    level_ones = models.ManyToManyField(LevelOne, blank=True, null=True, related_name="many")
+
+    def __str__(self) -> str:
+        return f"Many(id={self.id}, name={self.name})"

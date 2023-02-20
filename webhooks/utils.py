@@ -282,9 +282,8 @@ class WebhookSignalSession:
     def __init__(self):
         self._signals: deque[Signal] = deque()
         models.signals.post_save.connect(self._post_save)
+        models.signals.m2m_changed.connect(self._m2m_changed)
         models.signals.pre_delete.connect(self._pre_delete)
-        # TODO:
-        # models.signals.m2m_changed.connect(self._m2m_changed)
 
     def _post_save(self, sender, instance: models.Model, created: bool, **kwargs):
         if _STORE['disable_webhooks']:
@@ -307,6 +306,10 @@ class WebhookSignalSession:
 
     def updated(self, instance: models.Model):
         self._collect(instance, "updated")
+
+    def _m2m_changed(self, sender, instance: models.Model, action: str, **kwargs):
+        if action.startswith("post_"):  # post_add, post_remove, post_clear
+            self.updated(instance)
 
     def deleted(self, instance: models.Model):
         self._collect(instance, "deleted")
