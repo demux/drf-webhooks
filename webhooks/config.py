@@ -13,6 +13,9 @@ class WebhooksConfig:
     DEFAULT_JSON_RENDERER_CLASS: str = 'rest_framework.renderers.JSONRenderer'
     DEFAULT_XML_RENDERER_CLASS: str = 'rest_framework_xml.renderers.XMLRenderer'
     OWNER_FIELD: str = 'owner'
+    REGISTER_ADMIN: bool = True
+    WEBHOOK_ADMIN_CLASS: str | None = None
+    WEBHOOK_LOG_ADMIN_CLASS: str | None = None
 
 
 conf = WebhooksConfig(**getattr(settings, 'WEBHOOKS', {}))

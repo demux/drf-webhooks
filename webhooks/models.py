@@ -62,6 +62,8 @@ class Webhook(AbstractWebhook):
         )
 
     class Meta:
+        verbose_name = _("webhook")
+        verbose_name_plural = _("webhooks")
         swappable = swapper.swappable_setting('webhooks', 'Webhook')
 
 
@@ -94,6 +96,8 @@ class AbstractWebhookLogEntry(models.Model):
         return '<%s: %s>' % (self.__class__.__name__, self)
 
     class Meta:
+        verbose_name = _("webhook log entry")
+        verbose_name_plural = _("webhook log")
         abstract = True
 
 
@@ -101,4 +105,6 @@ class WebhookLogEntry(AbstractWebhookLogEntry):
     owner = models.ForeignKey(get_user_model(), on_delete=models.CASCADE)
 
     class Meta:
+        verbose_name = _("webhook log entry")
+        verbose_name_plural = _("webhook log")
         swappable = swapper.swappable_setting('webhooks', 'WebhookLogEntry')
