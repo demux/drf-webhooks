@@ -1,21 +1,41 @@
 import importlib
 
 import swapper
+from django import forms
 from django.contrib import admin
 
 from . import models as webhook_models
-from .config import conf
+from .config import REGISTERED_WEBHOOK_CHOICES, conf
 
 Webhook: webhook_models.AbstractWebhook = swapper.load_model("webhooks", "Webhook")
 WebhookLogEntry: webhook_models.AbstractWebhookLogEntry = swapper.load_model("webhooks", "WebhookLogEntry")
 
 
+class EventsChoiceWidget(forms.CheckboxSelectMultiple):
+    @property
+    def choices(self):
+        return list(REGISTERED_WEBHOOK_CHOICES.items())
+
+    @choices.setter
+    def choices(self, v):
+        pass
+
+
+class AbstractWebhookAdminForm(forms.ModelForm):
+    class Meta:
+        model = Webhook
+        widgets = {
+            'events': EventsChoiceWidget,
+        }
+        fields = '__all__'
+
+
 class AbstractWebhookAdmin(admin.ModelAdmin):
-    pass
+    form = AbstractWebhookAdminForm
 
 
 class WebhookAdmin(AbstractWebhookAdmin):
-    pass
+    raw_id_fields = ["owner"]
 
 
 class AbstractWebhookLogEntryAdmin(admin.ModelAdmin):

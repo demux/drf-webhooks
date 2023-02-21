@@ -2,9 +2,9 @@ import uuid
 
 import swapper
 from django.contrib.auth import get_user_model
+from django.contrib.postgres.fields import ArrayField
 from django.db import models
 from django.utils.translation import gettext_lazy as _
-from django_better_admin_arrayfield.models.fields import ArrayField
 
 
 class AbstractWebhook(models.Model):

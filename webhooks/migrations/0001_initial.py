@@ -3,9 +3,9 @@
 import uuid
 
 import django.db.models.deletion
-import django_better_admin_arrayfield.models.fields
 import swapper
 from django.conf import settings
+from django.contrib.postgres.fields import ArrayField
 from django.db import migrations, models
 
 
@@ -25,9 +25,7 @@ class Migration(migrations.Migration):
                 ('dt_updated', models.DateTimeField(auto_now=True)),
                 (
                     'events',
-                    django_better_admin_arrayfield.models.fields.ArrayField(
-                        base_field=models.CharField(db_index=True, max_length=128), size=None
-                    ),
+                    ArrayField(base_field=models.CharField(db_index=True, max_length=128), size=None),
                 ),
                 ('target_url', models.URLField(max_length=255)),
                 (
@@ -57,6 +55,8 @@ class Migration(migrations.Migration):
             ],
             options={
                 'swappable': swapper.swappable_setting('webhooks', 'Webhook'),
+                'verbose_name': 'webhook',
+                'verbose_name_plural': 'webhooks',
             },
         ),
         migrations.CreateModel(
@@ -84,12 +84,14 @@ class Migration(migrations.Migration):
                         null=True,
                         on_delete=django.db.models.deletion.SET_NULL,
                         related_name='log_entries',
-                        to=settings.WEBHOOKS_WEBHOOK_MODEL,
+                        to=swapper.swappable_setting('webhooks', 'Webhook'),
                     ),
                 ),
             ],
             options={
                 'swappable': swapper.swappable_setting('webhooks', 'WebhookLogEntry'),
+                'verbose_name': 'webhook log entry',
+                'verbose_name_plural': 'webhook log',
             },
         ),
     ]
