@@ -1,10 +1,10 @@
 import uuid
 
-import swapper
-from django.contrib.auth import get_user_model
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+
+from .config import conf
 
 
 class AbstractWebhook(models.Model):
@@ -51,25 +51,14 @@ class AbstractWebhook(models.Model):
         abstract = True
 
 
-class Webhook(AbstractWebhook):
-    owner = models.ForeignKey(get_user_model(), on_delete=models.CASCADE)
-
-    def __str__(self):
-        return 'id=%s, events=%s, owner=%s' % (
-            str(self.id),
-            ', '.join(self.events),
-            str(self.owner),
-        )
-
-    class Meta:
-        verbose_name = _("webhook")
-        verbose_name_plural = _("webhooks")
-        swappable = swapper.swappable_setting('webhooks', 'Webhook')
-
-
 class AbstractWebhookLogEntry(models.Model):
     id = models.UUIDField(primary_key=True, editable=False)
-    webhook = models.ForeignKey(Webhook, null=True, on_delete=models.SET_NULL, related_name="log_entries")
+    webhook = models.ForeignKey(
+        conf.WEBHOOK_MODEL_NAME,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name="log_entries",
+    )
 
     event = models.CharField(max_length=64, db_index=True)
 
@@ -99,12 +88,3 @@ class AbstractWebhookLogEntry(models.Model):
         verbose_name = _("webhook log entry")
         verbose_name_plural = _("webhook log")
         abstract = True
-
-
-class WebhookLogEntry(AbstractWebhookLogEntry):
-    owner = models.ForeignKey(get_user_model(), on_delete=models.CASCADE)
-
-    class Meta:
-        verbose_name = _("webhook log entry")
-        verbose_name_plural = _("webhook log")
-        swappable = swapper.swappable_setting('webhooks', 'WebhookLogEntry')

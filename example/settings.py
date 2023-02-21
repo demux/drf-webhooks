@@ -32,8 +32,9 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'webhooks',
-    'webhooks.tests',
+    'drf_webhooks',
+    'drf_webhooks.tests',
+    'example.webhooks',
 ]
 
 MIDDLEWARE = [
@@ -41,7 +42,7 @@ MIDDLEWARE = [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
-    'webhooks.middleware.WebhooksMiddleware',
+    'drf_webhooks.middleware.WebhooksMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -54,7 +55,7 @@ WEBHOOKS = {
 
 CELERY_BEAT_SCHEDULE = {
     'clean-webhook-log': {
-        'task': 'webhooks.tasks.auto_clean_log',
+        'task': 'drf_webhooks.tasks.auto_clean_log',
         'schedule': 60,
         'options': {'expires': 10},
     },

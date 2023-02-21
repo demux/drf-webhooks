@@ -1,12 +1,11 @@
 import importlib
 import logging
 from contextlib import suppress
-from typing import TYPE_CHECKING, Type
+from typing import Type
 from uuid import UUID, uuid4
 
 import httpx
 import pendulum
-import swapper
 import xmltodict
 from celery import shared_task
 from django.db import models
@@ -15,18 +14,13 @@ from pytimeparse.timeparse import timeparse
 from rest_framework import serializers
 from rest_framework.renderers import BaseRenderer
 
-from . import models as webhook_models
 from .config import conf
 from .serializers import WebhookEventSerializer
 
-if TYPE_CHECKING:
-    from .utils import ModelSerializerWebhook
-
 logger = logging.getLogger(__name__)
 
-
-Webhook: webhook_models.AbstractWebhook = swapper.load_model("webhooks", "Webhook")
-WebhookLogEntry: webhook_models.AbstractWebhookLogEntry = swapper.load_model("webhooks", "WebhookLogEntry")
+Webhook = conf.WEBHOOK_MODEL
+WebhookLogEntry = conf.WEBHOOK_LOG_ENTRY_MODEL
 
 
 def load_object_from_string(string: str) -> object:

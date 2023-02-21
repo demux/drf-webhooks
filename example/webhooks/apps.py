@@ -2,4 +2,5 @@ from django.apps import AppConfig
 
 
 class WebhooksAppConfig(AppConfig):
-    name = 'webhooks'
+    name = "example.webhooks"
+    label = "webhooks"

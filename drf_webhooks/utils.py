@@ -11,22 +11,19 @@ from typing import (
     TypedDict,
 )
 
-import swapper
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import models
 from inflection import underscore
 from rest_framework import serializers
 from rest_framework.renderers import BaseRenderer
 
-from . import models as webhook_models
 from .config import REGISTERED_WEBHOOK_CHOICES, conf
 from .tasks import dispatch_serializer_webhook_event
 
 logger = logging.getLogger(__name__)
 
+Webhook = conf.WEBHOOK_MODEL
 WebhookCUD = Literal["created", "updated", "deleted"]
-
-Webhook: webhook_models.AbstractWebhook = swapper.load_model("webhooks", "Webhook")
 
 
 class Signal(NamedTuple):

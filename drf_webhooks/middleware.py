@@ -1,4 +1,5 @@
-from webhooks.utils import webhook_signal_session
+from .utils import webhook_signal_session
+
 
 class WebhooksMiddleware:
     def __init__(self, get_response):

@@ -27,7 +27,7 @@
 ```python
 from auth.models import User
 from core.models import Address, Landlord, RentalUnit, Tenant
-from webhooks.utils import ModelSerializerWebhook
+from drf_webhooks.utils import ModelSerializerWebhook
 
 
 class DepositSerializerWebhook(ModelSerializerWebhook):

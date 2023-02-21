@@ -4,16 +4,16 @@ import pytest
 from django.contrib.auth import get_user_model
 from pytest_httpx import HTTPXMock
 
-from webhooks.models import Webhook
-from webhooks.utils import ModelSerializerWebhook, webhook_signal_session
-
-from ..config import REGISTERED_WEBHOOK_CHOICES
+from ..config import REGISTERED_WEBHOOK_CHOICES, conf
+from ..utils import ModelSerializerWebhook, webhook_signal_session
 from .models import LevelOne, LevelOneSide, LevelThree, LevelTwo, Many
 from .serializers import (
     LevelOneSideSerializer,
     LevelThreeSerializer,
     LevelTwoSerializer,
 )
+
+Webhook = conf.WEBHOOK_MODEL
 
 
 @pytest.fixture(scope='session')
