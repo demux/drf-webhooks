@@ -84,7 +84,7 @@ class Migration(migrations.Migration):
                         null=True,
                         on_delete=django.db.models.deletion.SET_NULL,
                         related_name='log_entries',
-                        to=swapper.swappable_setting('webhooks', 'Webhook'),
+                        to=settings.WEBHOOKS_WEBHOOK_MODEL,
                     ),
                 ),
             ],

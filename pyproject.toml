@@ -1,9 +1,13 @@
 [tool.poetry]
 name = "drf-webhooks"
-version = "0.1.0"
+version = "0.1.2"
+license = "MIT"
+readme = "README.md"
 description = "Setup webhooks using existing DRF Serializers"
 authors = ["Arnar Yngvason <arnar@reon.is>"]
-license = "MIT"
+repository = "https://github.com/demux/drf-webhooks"
+keywords = ["django", "drf", "rest", "djangorestapi", "webhooks"]
+packages = [{include = "webhooks"}]
 
 [tool.poetry.dependencies]
 python = "^3.10"
