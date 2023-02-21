@@ -177,7 +177,7 @@ class ModelSerializerWebhook(metaclass=ModelSerializerWebhookMeta):
             return
 
         webhook_ids = Webhook.objects.filter(
-            owner_id=owner.id,
+            **{conf.OWNER_FIELD: owner.id},
             events__contains=[event],
         ).values_list('id', flat=True)
 

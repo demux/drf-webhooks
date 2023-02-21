@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "drf-webhooks"
-version = "0.1.3"
+version = "0.1.4"
 license = "MIT"
 readme = "README.md"
 description = "Setup webhooks using existing DRF Serializers"
