@@ -159,9 +159,6 @@ def dispatch_serializer_webhook_event(
 
 @shared_task
 def auto_clean_log():
-    log_retention = conf.get("LOG_RETENTION")
-    if not log_retention:
-        return
-    log_retention = timeparse(log_retention, "minutes")
+    log_retention = timeparse(conf.LOG_RETENTION, "minutes")
     cutoff_dt = pendulum.now().subtract(minutes=log_retention)
     WebhookLogEntry.objects.filter(req_dt__lt=cutoff_dt).delete()

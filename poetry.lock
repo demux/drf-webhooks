@@ -304,6 +304,17 @@ files = [
 ]
 
 [[package]]
+name = "daytime"
+version = "0.4"
+description = "Extension for datetime.time with the main focus on comarison an making sums."
+category = "main"
+optional = false
+python-versions = "*"
+files = [
+    {file = "daytime-0.4.tar.gz", hash = "sha256:653c2af965966d677db6342e6de20d34a4a9261fe27e33b04a14f0ec74fd567d"},
+]
+
+[[package]]
 name = "decorator"
 version = "5.1.1"
 description = "Decorators for Humans"
@@ -1089,6 +1100,32 @@ pure-eval = "*"
 tests = ["cython", "littleutils", "pygments", "pytest", "typeguard"]
 
 [[package]]
+name = "timeparse"
+version = "0.5.5"
+description = "An argparse-extension for parsing command-line arguments as time-, date-, datetime-, or timedelta-objects."
+category = "main"
+optional = false
+python-versions = "*"
+files = [
+    {file = "timeparse-0.5.5.tar.gz", hash = "sha256:1066c90088e39212eb964edf3176d593fa26dcb329430c369259a9a8c8c4e539"},
+]
+
+[package.dependencies]
+daytime = "*"
+timeparser = "*"
+
+[[package]]
+name = "timeparser"
+version = "0.7.4"
+description = "A python-module to parse strings to time-, date-, datetime- or timedelta-objects."
+category = "main"
+optional = false
+python-versions = "*"
+files = [
+    {file = "timeparser-0.7.4.tar.gz", hash = "sha256:601740b58613240bcb23e1e3acf772e6a5f9457398dd5df961c95187382627dc"},
+]
+
+[[package]]
 name = "tomli"
 version = "2.0.1"
 description = "A lil' TOML parser"
@@ -1167,4 +1204,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "e3b6331c4fcad7ac2f63c9ff1100e208f0cf7a306f27c00e0c360cbc39ca760c"
+content-hash = "8d881249a8baf2a828990c581a01e53ff33b89966a4b39567f98026151d07d83"
