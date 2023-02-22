@@ -59,12 +59,12 @@ def test_serializer_webhook_define_success():
         serializer_class = LevelTwoSerializer
         base_name = 'test.level_two'
 
-        signal_model_instance_base_getters = {
-            LevelOne: lambda x: x.level_two_set.all(),
-            LevelOneSide: lambda x: x.one.level_two_set.all(),
-            LevelThree: lambda x: [x.parent],
-            Many: lambda x: [two for one in x.level_ones.all() for two in one.leveltwo_set.all()],
-        }
+        # signal_model_instance_base_getters = {
+        #     LevelOne: lambda x: x.level_two_set.all(),
+        #     LevelOneSide: lambda x: x.one.level_two_set.all(),
+        #     LevelThree: lambda x: [x.parent],
+        #     Many: lambda x: [two for one in x.level_ones.all() for two in one.leveltwo_set.all()],
+        # }
 
     try:
         assert REGISTERED_WEBHOOK_CHOICES['test.level_two.created'] == "Level Two Created"

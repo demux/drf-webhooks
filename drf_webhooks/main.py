@@ -1,7 +1,10 @@
 import logging
-from collections import deque
+from collections import defaultdict, deque
+from functools import reduce
+from operator import __or__
 from typing import (
     Callable,
+    DefaultDict,
     Hashable,
     Iterable,
     Literal,
@@ -38,7 +41,7 @@ class Store(TypedDict):
 
 
 SignalModelInstanceBaseMap = dict[
-    models.Model,
+    Type[models.Model],
     Callable[[models.Model], Iterable[models.Model]],
 ]
 
@@ -94,7 +97,12 @@ class ModelSerializerWebhook(metaclass=ModelSerializerWebhookMeta):
         self.nested_serializers = tuple(self._find_nested_model_serializers(self.serializer_class(), tuple()))
         self.nested_serializers_map = {m: s for m, s, _ in self.nested_serializers}
 
+        print(self.nested_serializers)
+
         _getters = self.get_signal_model_instance_base_getters()
+
+        # print(_getters)
+
         _getters_not_implemented = [m for m in self.nested_serializers_map.keys() if m not in _getters]
         if _getters_not_implemented:
             debug_tree = ""
@@ -153,7 +161,9 @@ class ModelSerializerWebhook(metaclass=ModelSerializerWebhookMeta):
         return getattr(instance, conf.OWNER_FIELD)
 
     def get_signal_model_instance_base_getters(self) -> SignalModelInstanceBaseMap:
-        return self.signal_model_instance_base_getters
+        getters = self._generate_signal_model_instance_base_getters()
+        getters.update(self.signal_model_instance_base_getters)
+        return getters
 
     def _register(self, name: WebhookCUD):
         REGISTERED_WEBHOOK_CHOICES[f'{self.base_name}.{name}'] = "%s %s" % (
@@ -212,6 +222,53 @@ class ModelSerializerWebhook(metaclass=ModelSerializerWebhookMeta):
             if isinstance(field, serializers.ModelSerializer):
                 yield (field.Meta.model, field, (*path, key))
                 yield from cls._find_nested_model_serializers(field, (*path, key))
+
+    @classmethod
+    def _find_nested_model_fields(cls, serializer: serializers.ModelSerializer, path: tuple[str]):
+        for key, field in serializer.fields.items():
+            if isinstance(field, serializers.ListSerializer):
+                field = field.child
+            if isinstance(field, serializers.ModelSerializer):
+                if field.source:
+                    p = (*path, *field.source.split("."))
+                else:
+                    p = (*path, key)
+
+                yield (field.Meta.model, field, p)
+                yield from cls._find_nested_model_serializers(field, p)
+
+    def _generate_signal_model_instance_base_getters(self) -> SignalModelInstanceBaseMap:
+        queries: DefaultDict[models.Model, set[str]] = defaultdict(set)
+
+        def _fn(serializer: serializers.ModelSerializer, path: list[str]):
+            model: Type[models.Model] = serializer.Meta.model
+
+            for field_name, field in serializer.fields.items():
+                if isinstance(field, serializers.ListSerializer):
+                    field = field.child
+
+                if isinstance(field, serializers.ModelSerializer):
+                    if field.source:
+                        p = [*path, *field.source.split(".")]
+                    else:
+                        p = [*path, field_name]
+
+                    queries[model].add("__".join(p))
+
+                    _fn(field, p)
+
+        _fn(self.serializer_class(), [])
+
+        # print(queries)
+
+        return {
+            m: (
+                lambda instance: self.model.objects.filter(
+                    reduce(__or__, [models.Q(**{query_str: instance}) for query_str in q])
+                )
+            )
+            for m, q in queries.items()
+        }
 
     def _exec(self, signals: deque[Signal]):
         created = set()
