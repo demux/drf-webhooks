@@ -1,4 +1,3 @@
-import importlib
 import logging
 from contextlib import suppress
 from typing import Type
@@ -16,16 +15,9 @@ from rest_framework.renderers import BaseRenderer
 
 from .config import conf
 from .serializers import WebhookEventSerializer
+from .utils import load_object_from_string
 
 logger = logging.getLogger(__name__)
-
-Webhook = conf.WEBHOOK_MODEL
-WebhookLogEntry = conf.WEBHOOK_LOG_ENTRY_MODEL
-
-
-def load_object_from_string(string: str) -> object:
-    module_path, class_name = string.rsplit(".", 1)
-    return getattr(importlib.import_module(module_path), class_name)
 
 
 @shared_task
@@ -38,7 +30,7 @@ def dispatch_webhook_event(
     json_renderer_class: None | str = None,
     xml_renderer_class: None | str = None,
 ):
-    webhook = Webhook.objects.get(id=webhook_id)
+    webhook = conf.WEBHOOK_MODEL.objects.get(id=webhook_id)
     if data is None:
         data = {}
 
@@ -71,7 +63,7 @@ def dispatch_webhook_event(
         'Content-Type': webhook.target_content_type,
     }
 
-    log_entry = WebhookLogEntry.objects.create(
+    log_entry = conf.WEBHOOK_LOG_ENTRY_MODEL.objects.create(
         id=event_id,
         webhook_id=webhook_id,
         owner_id=owner_id,  # FIXME: should be a configurable field name
@@ -161,4 +153,4 @@ def dispatch_serializer_webhook_event(
 def auto_clean_log():
     log_retention = timeparse(conf.LOG_RETENTION, "minutes")
     cutoff_dt = pendulum.now().subtract(minutes=log_retention)
-    WebhookLogEntry.objects.filter(req_dt__lt=cutoff_dt).delete()
+    conf.WEBHOOK_LOG_ENTRY_MODEL.objects.filter(req_dt__lt=cutoff_dt).delete()

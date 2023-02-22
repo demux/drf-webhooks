@@ -5,7 +5,8 @@ from django.contrib.auth import get_user_model
 from pytest_httpx import HTTPXMock
 
 from ..config import REGISTERED_WEBHOOK_CHOICES, conf
-from ..utils import ModelSerializerWebhook, webhook_signal_session
+from ..main import ModelSerializerWebhook
+from ..sessions import webhook_signal_session
 from .models import LevelOne, LevelOneSide, LevelThree, LevelTwo, Many
 from .serializers import (
     LevelOneSideSerializer,

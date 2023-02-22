@@ -1,4 +1,4 @@
-from .utils import webhook_signal_session
+from .sessions import webhook_signal_session
 
 
 class WebhooksMiddleware:
