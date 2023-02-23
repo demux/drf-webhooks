@@ -1,11 +1,12 @@
 import json
+from atexit import unregister
 
 import pytest
 from django.contrib.auth import get_user_model
 from pytest_httpx import HTTPXMock
 
 from ..config import REGISTERED_WEBHOOK_CHOICES, conf
-from ..main import ModelSerializerWebhook
+from ..main import ModelSerializerWebhook, register_webhook, unregister_webhook
 from ..sessions import webhook_signal_session
 from .models import LevelOne, LevelOneSide, LevelThree, LevelTwo, Many
 from .serializers import (
@@ -22,69 +23,39 @@ def celery_config():
     return {'task_always_eager': True}
 
 
-def test_serializer_webhook_getters_not_implemented():
-    with pytest.raises(NotImplementedError):
-
-        class LevelTwoSerializerWebhook(ModelSerializerWebhook):
-            serializer_class = LevelTwoSerializer
-            base_name = 'test.level_two'
-
-
 def test_serializer_webhook_getters_duplicate_base_name():
     with pytest.raises(RuntimeError):
 
+        @register_webhook(LevelOneSideSerializer)
         class LevelOneSideSerializerWebhook(ModelSerializerWebhook):
-            serializer_class = LevelOneSideSerializer
             base_name = 'test.level'
 
+        @register_webhook(LevelThreeSerializer)
         class LevelThreeSerializerWebhook2(ModelSerializerWebhook):
-            serializer_class = LevelThreeSerializer
             base_name = 'test.level'
 
 
 def test_serializer_webhook_getters_duplicate_serializer():
     with pytest.raises(RuntimeError):
-
-        class LevelThreeSerializerWebhook(ModelSerializerWebhook):
-            serializer_class = LevelThreeSerializer
-            base_name = 'test.level_three'
-
-        class LevelThreeSerializerWebhook2(ModelSerializerWebhook):
-            serializer_class = LevelThreeSerializer
-            base_name = 'test.level_three_2'
+        register_webhook(LevelThreeSerializer)()
+        register_webhook(LevelThreeSerializer)()
 
 
 def test_serializer_webhook_define_success():
-    class LevelTwoSerializerWebhook(ModelSerializerWebhook):
-        serializer_class = LevelTwoSerializer
-        base_name = 'test.level_two'
-
-        # signal_model_instance_base_getters = {
-        #     LevelOne: lambda x: x.level_two_set.all(),
-        #     LevelOneSide: lambda x: x.one.level_two_set.all(),
-        #     LevelThree: lambda x: [x.parent],
-        #     Many: lambda x: [two for one in x.level_ones.all() for two in one.leveltwo_set.all()],
-        # }
+    register_webhook(LevelTwoSerializer)()
 
     try:
         assert REGISTERED_WEBHOOK_CHOICES['test.level_two.created'] == "Level Two Created"
         assert REGISTERED_WEBHOOK_CHOICES['test.level_two.updated'] == "Level Two Updated"
         assert REGISTERED_WEBHOOK_CHOICES['test.level_two.deleted'] == "Level Two Deleted"
     finally:
-        LevelTwoSerializerWebhook.disconnect()
+        unregister_webhook(LevelTwoSerializer)
 
 
 def test_serializer_webhook_events(db, httpx_mock: HTTPXMock):
+    @register_webhook(LevelTwoSerializer)
     class LevelTwoSerializerWebhook(ModelSerializerWebhook):
-        serializer_class = LevelTwoSerializer
         base_name = 'test.level_two'
-
-        signal_model_instance_base_getters = {
-            LevelOne: lambda x: x.leveltwo_set.all(),
-            LevelOneSide: lambda x: x.one.leveltwo_set.all(),
-            LevelThree: lambda x: [x.parent],
-            Many: lambda x: [two for one in x.level_ones.all() for two in one.leveltwo_set.all()],
-        }
 
         def get_owner(self, instance):
             return instance.parent.owner
@@ -195,4 +166,4 @@ def test_serializer_webhook_events(db, httpx_mock: HTTPXMock):
         assert level_two2__deleted["objectId"] == str(two2.id)
         assert not level_two2__deleted["payload"]
     finally:
-        LevelTwoSerializerWebhook.disconnect()
+        unregister_webhook(LevelTwoSerializer)

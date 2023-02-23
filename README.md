@@ -1,5 +1,5 @@
 # Django Rest Framework - Webhooks
-**Configurable webhooks based on DRF Serializers**
+**Configurable webhooks for DRF Serializers**
 
 ## Goals:
 - [x] Use existing DRF Serializers from REST API to serialize data in webhooks
@@ -7,7 +7,7 @@
     - [x] Reusable OpenAPI schemas
 - [x] Configurable webhooks that simply work *(by way of django signals magic)* without the developer having to keep track of where to trigger them
     - [x] Still allow for "manual" triggering of webhooks
-        - This is useful because signals aren't always triggered.
+        - This is useful because signals aren't always triggered
         - For example: `QuerySet.update` does not trigger signals
 - [x] Disable webhooks using context managers
     - This can be useful when syncing large chunks of data
@@ -16,67 +16,110 @@
     - [x] A context manager gathers all models signals and at the end of the session only triggers the resulting webhooks
         - [x] If a model instance is both `created` and `deleted` within the session, then no webhook is sent for that model instance
         - [x] If a model instance is `created` and then also `updated` within the session, then a `created` event is sent with the data from the last `updated` signal. Only one webhook even is sent
-        - [x] If a models instance is `updated` multiple times within the session, then only one webhook event is sent.
+        - [x] If a models instance is `updated` multiple times within the session, then only one webhook event is sent
     - [x] Middleware wraps each request in **Webhook Signal Session** context
         - **NOTE:** The developer will have to call the context manager in code that runs outside of requests (for example in celery tasks) manually
-- [ ] Automatically determine which nested models need to be monitored for changes. Currently this must be done by setting `signal_model_instance_base_getters`
+- [x] Automatically determine which nested models need to be monitored for changes
 
-
-## Example:
+## Examples:
 
 ```python
-from auth.models import User
-from core.models import Address, Landlord, RentalUnit, Tenant
-from drf_webhooks.utils import ModelSerializerWebhook
+from django.db import models
+from drf_webhooks import ModelSerializerWebhook, register_webhook
+from rest_framework import serializers
 
 
-class DepositSerializerWebhook(ModelSerializerWebhook):
-    serializer_class = DepositSerializer
-    base_name = 'core.deposit'
+class MyModel(models.Model):
+    name = models.CharField(max_lenght=100)
 
-    @staticmethod
-    def get_address_instance_base(address):
-        tenants = address.tenant_set.all()
-        for tenant in tenants:
-            yield from tenant.deposits.all()
 
-        unit = getattr(address, "unit", None)
-        if unit:
-            yield from address.unit.deposits.all()
-
-    # Monitor changes to data in nested serializers:
-    signal_model_instance_base_getters = {
-        Tenant: lambda x: x.deposits.all(),
-        User: lambda x: x.tenant.deposits.all(),
-        RentalUnit: lambda x: x.deposits.all(),
-        Address: get_address_instance_base,
-        Landlord: lambda x: [],  # Not important for this hook
-    }
-
-...
-
-class DepositSerializer(serializers.ModelSerializer):
-    tenant = TenantSerializer(read_only=True)
-    landlord = LandlordSerializer(read_only=True)
-    unit = RentalUnitSerializer(read_only=True)
-
+class MyModelSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Deposit
-        fields = [
-            'id',
-            'created',
-            'tenant',
-            'landlord',
-            'unit',
-            'date_from',
-            'date_to',
-            'security_deposit_amount',
-            'last_months_rent_amount',
-            'fee_rate',
-            'fee_amount',
-            'status',
-            'initiator',
-        ]
+        model = MyModel
+        fields = ['id', 'name']
 
-...
+
+# Automatic:
+register_webhook(MyModel)()
+
+# ---- OR ----
+# If you need more configuration:
+@register_webhook(MyModel)
+class MyModelWebhook(ModelSerializerWebhook):
+    base_name = 'core.my_model'
+```
+
+# Documentation:
+
+## Quckstart:
+
+### Install `drf-webhooks`
+```bash
+poetry add drf-webhooks
+# ... or ...
+pip install drf-webhooks
+```
+
+### Update `settings.py`:
+```python
+INSTALLED_APPS = [
+    # ...
+    'drf_webhooks',
+]
+
+MIDDLEWARE = [
+    # ...
+    'drf_webhooks.middleware.WebhooksMiddleware',
+]
+
+# This is required if you don't want your database to fill up with logs:
+CELERY_BEAT_SCHEDULE = {
+    'clean-webhook-log': {
+        'task': 'drf_webhooks.tasks.auto_clean_log',
+        'schedule': 60,
+        'options': {'expires': 10},
+    },
+}
+```
+
+### Create a new django app
+Recommended app name: `webhooks`
+
+```python
+# ----------------------------------------------------------------------
+#  apps.py
+# ----------------------------------------------------------------------
+from django.apps import AppConfig
+
+
+class WebhooksAppConfig(AppConfig):
+    name = "<your module name>"
+    label = "webhooks"
+
+
+# ----------------------------------------------------------------------
+#  models.py
+# ----------------------------------------------------------------------
+from django.contrib.auth import get_user_model
+from django.db import models
+from django.utils.translation import gettext_lazy as _
+
+from drf_webhooks.models import AbstractWebhook, AbstractWebhookLogEntry
+
+
+class Webhook(AbstractWebhook):
+    # This can also be a group or an organization that the user belongs to:
+    owner = models.ForeignKey(get_user_model(), on_delete=models.CASCADE)
+
+    def __str__(self):
+        return 'id=%s, events=%s, owner=%s' % (
+            str(self.id),
+            ', '.join(self.events),
+            str(self.owner),
+        )
+
+
+class WebhookLogEntry(AbstractWebhookLogEntry):
+    # This can also be a group or an organization that the user belongs to:
+    owner = models.ForeignKey(get_user_model(), on_delete=models.CASCADE)
 ```

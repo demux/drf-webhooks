@@ -35,9 +35,8 @@ class Signal(NamedTuple):
 
 class Store(TypedDict):
     disable_webhooks: bool
-    model_serializer_webhook_instances: dict[str, "ModelSerializerWebhook"]
+    model_serializer_webhook_instances: dict[Type[serializers.ModelSerializer], "ModelSerializerWebhook"]
     model_serializer_webhook_base_names: set[str]
-    model_serializer_webhook_serializers: set[serializers.ModelSerializer]
 
 
 SignalModelInstanceBaseMap = dict[
@@ -49,33 +48,10 @@ _STORE: Store = {
     "disable_webhooks": False,
     "model_serializer_webhook_instances": {},
     "model_serializer_webhook_base_names": set(),
-    "model_serializer_webhook_serializers": set(),
 }
 
 
-class ModelSerializerWebhookMeta(type):
-    def __init__(cls, name, bases, clsdict):
-        super().__init__(name, bases, clsdict)
-
-        if len(cls.mro()) > 2:
-            msw: ModelSerializerWebhook = cls()
-
-            instances = _STORE["model_serializer_webhook_instances"]
-            base_names = _STORE["model_serializer_webhook_base_names"]
-            _serialisers = _STORE["model_serializer_webhook_serializers"]
-
-            if msw.base_name in base_names:
-                raise RuntimeError(f'ModelSerializerWebhook with base_name "{msw.base_name}" already defined')
-
-            if msw.serializer_class in _serialisers:
-                raise RuntimeError(f'ModelSerializerWebhook for "{msw.serializer_class.__name__}" already defined')
-
-            instances[cls] = msw
-            base_names.add(msw.base_name)
-            _serialisers.add(msw.serializer_class)
-
-
-class ModelSerializerWebhook(metaclass=ModelSerializerWebhookMeta):
+class ModelSerializerWebhook:
     serializer_class: Type[serializers.ModelSerializer]
     json_renderer_class: Type[BaseRenderer] | None = None
     xml_renderer_class: Type[BaseRenderer] | None = None
@@ -87,7 +63,8 @@ class ModelSerializerWebhook(metaclass=ModelSerializerWebhookMeta):
 
     signal_model_instance_base_getters: SignalModelInstanceBaseMap = {}
 
-    def __init__(self):
+    def __init__(self, serializer_class: Type[serializers.ModelSerializer]):
+        self.serializer_class = serializer_class
         model: Type[models.Model] = self.serializer_class.Meta.model
         self.model = model
 
@@ -97,11 +74,7 @@ class ModelSerializerWebhook(metaclass=ModelSerializerWebhookMeta):
         self.nested_serializers = tuple(self._find_nested_model_serializers(self.serializer_class(), tuple()))
         self.nested_serializers_map = {m: s for m, s, _ in self.nested_serializers}
 
-        print(self.nested_serializers)
-
         _getters = self.get_signal_model_instance_base_getters()
-
-        # print(_getters)
 
         _getters_not_implemented = [m for m in self.nested_serializers_map.keys() if m not in _getters]
         if _getters_not_implemented:
@@ -122,40 +95,27 @@ class ModelSerializerWebhook(metaclass=ModelSerializerWebhookMeta):
                 )
             )
 
+    def _register_all_choices(self):
         if self.create:
-            self._register('created')
+            self._register_choice('created')
         if self.update:
-            self._register('updated')
+            self._register_choice('updated')
         if self.delete:
-            self._register('deleted')
+            self._register_choice('deleted')
 
-    @classmethod
-    def __del__(cls):
-        cls.disconnect()
+    def _register_choice(self, name: WebhookCUD):
+        REGISTERED_WEBHOOK_CHOICES[f'{self.base_name}.{name}'] = "%s %s" % (
+            self.model._meta.verbose_name.title(),
+            name.title(),
+        )
 
-    @classmethod
-    def disconnect(cls):
-        try:
-            self = cls.instance
-        except (KeyError, TypeError):
-            return
-
-        del _STORE["model_serializer_webhook_instances"][self.__class__]
-        _STORE["model_serializer_webhook_base_names"].remove(self.base_name)
-        _STORE["model_serializer_webhook_serializers"].remove(self.serializer_class)
-
-    @classmethod
     @property
-    def instance(cls):
-        return _STORE["model_serializer_webhook_instances"][cls]
+    def instance(self):
+        return _STORE["model_serializer_webhook_instances"][self.serializer_class]
 
     @property
     def serializer_module_path(self):
         return f"{self.serializer_class.__module__}.{self.serializer_class.__name__}"
-
-    @property
-    def own_module_path(self):
-        return f'{self.__class__.__module__}.{self.__class__.__name__}'
 
     def get_owner(self, instance: models.Model) -> models.Model:
         return getattr(instance, conf.OWNER_FIELD)
@@ -164,12 +124,6 @@ class ModelSerializerWebhook(metaclass=ModelSerializerWebhookMeta):
         getters = self._generate_signal_model_instance_base_getters()
         getters.update(self.signal_model_instance_base_getters)
         return getters
-
-    def _register(self, name: WebhookCUD):
-        REGISTERED_WEBHOOK_CHOICES[f'{self.base_name}.{name}'] = "%s %s" % (
-            self.model._meta.verbose_name.title(),
-            name.title(),
-        )
 
     def _get_owner(self, instance: models.Model) -> models.Model:
         owner = getattr(instance, "_cached_owner", None)
@@ -219,47 +173,24 @@ class ModelSerializerWebhook(metaclass=ModelSerializerWebhookMeta):
         for key, field in serializer.fields.items():
             if isinstance(field, serializers.ListSerializer):
                 field = field.child
-            if isinstance(field, serializers.ModelSerializer):
-                yield (field.Meta.model, field, (*path, key))
-                yield from cls._find_nested_model_serializers(field, (*path, key))
 
-    @classmethod
-    def _find_nested_model_fields(cls, serializer: serializers.ModelSerializer, path: tuple[str]):
-        for key, field in serializer.fields.items():
-            if isinstance(field, serializers.ListSerializer):
-                field = field.child
             if isinstance(field, serializers.ModelSerializer):
+                model: Type[models.Model] = field.Meta.model
                 if field.source:
                     p = (*path, *field.source.split("."))
                 else:
+                    print(field.__class__.__name__)
+                    model_field = model._meta.get_field(key)
                     p = (*path, key)
 
-                yield (field.Meta.model, field, p)
+                yield (model, field, p)
                 yield from cls._find_nested_model_serializers(field, p)
 
     def _generate_signal_model_instance_base_getters(self) -> SignalModelInstanceBaseMap:
-        queries: DefaultDict[models.Model, set[str]] = defaultdict(set)
+        queries: DefaultDict[Type[models.Model], set[str]] = defaultdict(set)
 
-        def _fn(serializer: serializers.ModelSerializer, path: list[str]):
-            model: Type[models.Model] = serializer.Meta.model
-
-            for field_name, field in serializer.fields.items():
-                if isinstance(field, serializers.ListSerializer):
-                    field = field.child
-
-                if isinstance(field, serializers.ModelSerializer):
-                    if field.source:
-                        p = [*path, *field.source.split(".")]
-                    else:
-                        p = [*path, field_name]
-
-                    queries[model].add("__".join(p))
-
-                    _fn(field, p)
-
-        _fn(self.serializer_class(), [])
-
-        # print(queries)
+        for m, _, p in self.nested_serializers:
+            queries[m].add("__".join(p))
 
         return {
             m: (
@@ -310,3 +241,34 @@ class ModelSerializerWebhook(metaclass=ModelSerializerWebhookMeta):
                 self.on_create(instance)
             elif self.update:
                 self.on_update(instance)
+
+
+def register_webhook(serializer_class: Type[serializers.ModelSerializer]):
+    def fn(webhook_class: Type[ModelSerializerWebhook] | None = None):
+        instances = _STORE["model_serializer_webhook_instances"]
+        base_names = _STORE["model_serializer_webhook_base_names"]
+
+        if webhook_class:
+            msw = webhook_class(serializer_class)
+        else:
+            msw = ModelSerializerWebhook(serializer_class)
+
+        if msw.serializer_class in instances.keys():
+            raise RuntimeError(f'ModelSerializerWebhook for "{serializer_class.__name__}" already registered')
+
+        if msw.base_name in base_names:
+            raise RuntimeError(f'ModelSerializerWebhook with base_name="{msw.base_name}" already registered')
+
+        msw._register_all_choices()
+        instances[msw] = msw
+        base_names.add(msw.base_name)
+
+        return serializer_class
+
+    return fn
+
+
+def unregister_webhook(serializer_class: Type[serializers.ModelSerializer]):
+    msw = _STORE["model_serializer_webhook_instances"][serializer_class]
+    del _STORE["model_serializer_webhook_instances"][serializer_class]
+    _STORE["model_serializer_webhook_base_names"].remove(msw.base_name)
