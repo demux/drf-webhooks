@@ -13,11 +13,12 @@ from typing import (
     TypedDict,
 )
 
-from django.core.exceptions import ObjectDoesNotExist
 from django.db import models
 from inflection import underscore
 from rest_framework import serializers
 from rest_framework.renderers import BaseRenderer
+
+from drf_webhooks.utils import get_serializer_query_names
 
 from .config import REGISTERED_WEBHOOK_CHOICES, conf
 from .tasks import dispatch_serializer_webhook_event
@@ -41,7 +42,7 @@ class Store(TypedDict):
 
 SignalModelInstanceBaseMap = dict[
     Type[models.Model],
-    Callable[[models.Model], Iterable[models.Model]],
+    Callable[[models.Model], models.Q],
 ]
 
 _STORE: Store = {
@@ -173,33 +174,27 @@ class ModelSerializerWebhook:
         for key, field in serializer.fields.items():
             if isinstance(field, serializers.ListSerializer):
                 field = field.child
-
             if isinstance(field, serializers.ModelSerializer):
-                model: Type[models.Model] = field.Meta.model
-                if field.source:
-                    p = (*path, *field.source.split("."))
-                else:
-                    print(field.__class__.__name__)
-                    model_field = model._meta.get_field(key)
-                    p = (*path, key)
+                yield (field.Meta.model, field, (*path, key))
+                yield from cls._find_nested_model_serializers(field, (*path, key))
 
-                yield (model, field, p)
-                yield from cls._find_nested_model_serializers(field, p)
+    @staticmethod
+    def _base_getter_factory(q: set[str]):
+        def _fn(instance: models.Model):
+            return reduce(
+                __or__,
+                [models.Q(**{query_str: instance}) for query_str in q],
+            )
+
+        return _fn
 
     def _generate_signal_model_instance_base_getters(self) -> SignalModelInstanceBaseMap:
         queries: DefaultDict[Type[models.Model], set[str]] = defaultdict(set)
 
-        for m, _, p in self.nested_serializers:
-            queries[m].add("__".join(p))
+        for m, qname in get_serializer_query_names(self.serializer_class()):
+            queries[m].add(qname)
 
-        return {
-            m: (
-                lambda instance: self.model.objects.filter(
-                    reduce(__or__, [models.Q(**{query_str: instance}) for query_str in q])
-                )
-            )
-            for m, q in queries.items()
-        }
+        return {m: self._base_getter_factory(q) for m, q in queries.items()}
 
     def _exec(self, signals: deque[Signal]):
         created = set()
@@ -207,6 +202,8 @@ class ModelSerializerWebhook:
         latest_instances: dict[Hashable, models.Model] = {}
 
         base_getters = self.get_signal_model_instance_base_getters()
+
+        queries: list[models.Q] = []
 
         for signal in signals:
             if signal.instance.__class__ is self.model:
@@ -223,12 +220,16 @@ class ModelSerializerWebhook:
                 continue
 
             try:
-                base_instances = base_getters[signal.instance.__class__](signal.instance)
-            except (KeyError, ValueError, ObjectDoesNotExist):
+                getter = base_getters[signal.instance.__class__]
+            except KeyError:
                 pass
             else:
-                for inst in base_instances:
-                    latest_instances[inst.pk] = inst
+                queries.append(getter(signal.instance))
+
+        if queries:
+            queryset = self.model.objects.filter(reduce(__or__, queries))
+            for inst in queryset:
+                latest_instances[inst.pk] = inst
 
         for instance in latest_instances.values():
             if instance.pk in created and instance.pk in deleted:
@@ -263,12 +264,18 @@ def register_webhook(serializer_class: Type[serializers.ModelSerializer]):
         instances[msw] = msw
         base_names.add(msw.base_name)
 
-        return serializer_class
+        return msw
 
     return fn
 
 
 def unregister_webhook(serializer_class: Type[serializers.ModelSerializer]):
-    msw = _STORE["model_serializer_webhook_instances"][serializer_class]
+    try:
+        msw = _STORE["model_serializer_webhook_instances"][serializer_class]
+    except KeyError:
+        return False
+
     del _STORE["model_serializer_webhook_instances"][serializer_class]
     _STORE["model_serializer_webhook_base_names"].remove(msw.base_name)
+
+    return True

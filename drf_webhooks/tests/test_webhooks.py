@@ -1,5 +1,4 @@
 import json
-from atexit import unregister
 
 import pytest
 from django.contrib.auth import get_user_model
