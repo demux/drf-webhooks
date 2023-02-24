@@ -40,11 +40,11 @@ class MyModelSerializer(serializers.ModelSerializer):
 
 
 # Automatic:
-register_webhook(MyModel)()
+register_webhook(MyModelSerializer)()
 
 # ---- OR ----
 # If you need more configuration:
-@register_webhook(MyModel)
+@register_webhook(MyModelSerializer)
 class MyModelWebhook(ModelSerializerWebhook):
     base_name = 'core.my_model'
 ```
