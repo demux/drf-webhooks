@@ -23,7 +23,7 @@ class ManySerializer(serializers.ModelSerializer):
 
 class LevelOneSerializer(serializers.ModelSerializer):
     side = LevelOneSideSerializer(many=False)
-    many = ManySerializer(many=True)
+    many = ManySerializer(many=True)  # type: ignore
 
     class Meta:
         model = LevelOne

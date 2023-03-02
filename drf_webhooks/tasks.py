@@ -1,6 +1,6 @@
 import logging
 from contextlib import suppress
-from typing import Type
+from typing import TYPE_CHECKING, Type
 from uuid import UUID, uuid4
 
 import httpx
@@ -17,6 +17,9 @@ from .config import conf
 from .serializers import WebhookEventSerializer
 from .utils import load_object_from_string
 
+if TYPE_CHECKING:
+    from drf_webhooks.models import AbstractWebhook, AbstractWebhookLogEntry
+
 logger = logging.getLogger(__name__)
 
 
@@ -30,7 +33,7 @@ def dispatch_webhook_event(
     json_renderer_class: None | str = None,
     xml_renderer_class: None | str = None,
 ):
-    webhook = conf.WEBHOOK_MODEL.objects.get(id=webhook_id)
+    webhook: Type[AbstractWebhook] = conf.WEBHOOK_MODEL.objects.get(id=webhook_id)  # type: ignore
     if data is None:
         data = {}
 
@@ -63,7 +66,7 @@ def dispatch_webhook_event(
         'Content-Type': webhook.target_content_type,
     }
 
-    log_entry = conf.WEBHOOK_LOG_ENTRY_MODEL.objects.create(
+    log_entry: Type[AbstractWebhookLogEntry] = conf.WEBHOOK_LOG_ENTRY_MODEL.objects.create(  # type: ignore
         id=event_id,
         webhook_id=webhook_id,
         owner_id=owner_id,  # FIXME: should be a configurable field name
@@ -77,7 +80,7 @@ def dispatch_webhook_event(
     )
 
     try:
-        res: httpx.Response = getattr(httpx, webhook.target_method)(
+        res = getattr(httpx, webhook.target_method)(
             url=webhook.target_url,
             headers=headers,
             content=req_content,
@@ -88,6 +91,7 @@ def dispatch_webhook_event(
         # The only exception that has a response
         log_entry.error_code = "HTTPStatusError"
         log_entry.error_message = str(e)
+        res: httpx.Response = e.response
 
     except (httpx.HTTPError, httpx.InvalidURL) as e:
         # These exceptions happened before getting a response

@@ -50,15 +50,16 @@ class WebhookSignalSession:
         # This has be get done while these objects still exist:
         for msw in _STORE["model_serializer_webhook_instances"].values():
             if isinstance(instance, msw.model):
-                instance._cached_owner = msw.get_owner(instance)
+                setattr(instance, '_cached_owner', msw.get_owner(instance))
 
-            base_getters = msw.get_signal_model_instance_base_getters()
-            try:
-                base_instances = base_getters[msw.instance.__class__](msw.instance)
-            except KeyError:
-                continue
-            for inst in base_instances:
-                self.updated(inst)
+            # FIXME: This wasn't working but the unit tests didn't catch it
+            # base_getters = msw.get_signal_model_instance_base_getters()
+            # try:
+            #     base_instances = base_getters[instance.__class__](instance)
+            # except KeyError:
+            #     continue
+            # for inst in msw.model.objects.filter(base_instances):
+            #     self.updated(inst)
 
     def close(self):
         for swh in _STORE["model_serializer_webhook_instances"].values():

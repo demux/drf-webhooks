@@ -2,7 +2,6 @@ import json
 
 import pytest
 from django.contrib.auth import get_user_model
-from pytest_httpx import HTTPXMock
 
 from ..config import REGISTERED_WEBHOOK_CHOICES, conf
 from ..main import ModelSerializerWebhook, register_webhook, unregister_webhook
@@ -51,13 +50,13 @@ def test_serializer_webhook_define_success():
         unregister_webhook(LevelTwoSerializer)
 
 
-def test_serializer_webhook_events(db, httpx_mock: HTTPXMock):
+def test_serializer_webhook_events(db, httpx_mock):
     @register_webhook(LevelTwoSerializer)
     class LevelTwoSerializerWebhook(ModelSerializerWebhook):
         base_name = 'test.level_two'
 
         def get_owner(self, instance):
-            return instance.parent.owner
+            return instance.parent.owner  # type: ignore
 
     try:
         with webhook_signal_session():
@@ -77,10 +76,10 @@ def test_serializer_webhook_events(db, httpx_mock: HTTPXMock):
             )
 
             one = LevelOne.objects.create(name="one", owner=owner)
-            one_id = one.id
+            one_id = one.pk
             two = LevelTwo.objects.create(name="two", parent=one)
             side = LevelOneSide.objects.create(name="side", one=one)
-            side_id = side.id
+            side_id = side.pk
             three = LevelThree.objects.create(name="three", parent=two)
             three.delete()
 
@@ -94,12 +93,12 @@ def test_serializer_webhook_events(db, httpx_mock: HTTPXMock):
             two.save()
 
             three2 = LevelThree.objects.create(name="three2", parent=two2)
-            three2_id = three2.id
+            three2_id = three2.pk
 
         with webhook_signal_session():
             many = Many.objects.create(name="Many")
             many.level_ones.add(one)
-            many_id = many.id
+            many_id = many.pk
 
         with webhook_signal_session():
             one.delete()
@@ -121,26 +120,26 @@ def test_serializer_webhook_events(db, httpx_mock: HTTPXMock):
         ) = [json.loads(r.content) for r in httpx_mock.get_requests()]
 
         assert level_two__created["event"] == "test.level_two.created"
-        assert level_two__created["objectId"] == str(two.id)
+        assert level_two__created["objectId"] == str(two.pk)
         assert level_two__created["payload"]["name"] == "two!"
         assert level_two__created["payload"]["parent"]["id"] == one_id
         assert level_two__created["payload"]["parent"]["side"]["id"] == side_id
 
         assert level_two2__created["event"] == "test.level_two.created"
-        assert level_two2__created["objectId"] == str(two2.id)
+        assert level_two2__created["objectId"] == str(two2.pk)
         assert level_two2__created["payload"]["name"] == "more two"
         assert level_two2__created["payload"]["parent"]["id"] == one_id
         assert level_two2__created["payload"]["parent"]["side"]["id"] == side_id
 
         assert level_two__updated["event"] == "test.level_two.updated"
-        assert level_two__updated["objectId"] == str(two.id)
+        assert level_two__updated["objectId"] == str(two.pk)
         assert level_two__updated["payload"]["name"] == "updated name"
         assert level_two__updated["payload"]["parent"]["id"] == one_id
         assert level_two__updated["payload"]["parent"]["many"] == []
         assert level_two__updated["payload"]["parent"]["side"]["id"] == side_id
 
         assert level_two2__updated["event"] == "test.level_two.updated"
-        assert level_two2__updated["objectId"] == str(two2.id)
+        assert level_two2__updated["objectId"] == str(two2.pk)
         assert level_two2__updated["payload"]["name"] == "more two"
         assert level_two2__updated["payload"]["parent"]["id"] == one_id
         assert level_two2__updated["payload"]["parent"]["many"] == []
@@ -148,21 +147,21 @@ def test_serializer_webhook_events(db, httpx_mock: HTTPXMock):
         assert level_two2__updated["payload"]["levelthreeSet"][0]["id"] == three2_id
 
         assert m2m__updated["event"] == "test.level_two.updated"
-        assert m2m__updated["objectId"] == str(two.id)
+        assert m2m__updated["objectId"] == str(two.pk)
         assert m2m__updated["payload"]["parent"]["many"][0]["id"] == many_id
         assert len(m2m__updated["payload"]["parent"]["many"]) == 1
 
         assert m2m_2__updated["event"] == "test.level_two.updated"
-        assert m2m_2__updated["objectId"] == str(two2.id)
+        assert m2m_2__updated["objectId"] == str(two2.pk)
         assert m2m_2__updated["payload"]["parent"]["many"][0]["id"] == many_id
         assert len(m2m_2__updated["payload"]["parent"]["many"]) == 1
 
         assert level_two__deleted["event"] == "test.level_two.deleted"
-        assert level_two__deleted["objectId"] == str(two.id)
+        assert level_two__deleted["objectId"] == str(two.pk)
         assert not level_two__deleted["payload"]
 
         assert level_two2__deleted["event"] == "test.level_two.deleted"
-        assert level_two2__deleted["objectId"] == str(two2.id)
+        assert level_two2__deleted["objectId"] == str(two2.pk)
         assert not level_two2__deleted["payload"]
     finally:
         unregister_webhook(LevelTwoSerializer)

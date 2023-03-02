@@ -7,7 +7,7 @@ class LevelOne(models.Model):
     owner = models.ForeignKey(get_user_model(), on_delete=models.CASCADE)
 
     def __str__(self) -> str:
-        return f"LevelOne(id={self.id}, name={self.name})"
+        return f"LevelOne(id={self.pk}, name={self.name})"
 
 
 class LevelOneSide(models.Model):
@@ -15,7 +15,7 @@ class LevelOneSide(models.Model):
     one = models.OneToOneField(LevelOne, related_name='side', on_delete=models.CASCADE)
 
     def __str__(self) -> str:
-        return f"LevelOneSide(id={self.id}, name={self.name})"
+        return f"LevelOneSide(id={self.pk}, name={self.name})"
 
 
 class LevelTwo(models.Model):
@@ -23,7 +23,7 @@ class LevelTwo(models.Model):
     parent = models.ForeignKey(LevelOne, on_delete=models.CASCADE)
 
     def __str__(self) -> str:
-        return f"LevelTwo(id={self.id}, name={self.name})"
+        return f"LevelTwo(id={self.pk}, name={self.name})"
 
 
 class LevelThree(models.Model):
@@ -31,7 +31,7 @@ class LevelThree(models.Model):
     parent = models.ForeignKey(LevelTwo, on_delete=models.CASCADE)
 
     def __str__(self) -> str:
-        return f"LevelThree(id={self.id}, name={self.name})"
+        return f"LevelThree(id={self.pk}, name={self.name})"
 
 
 class Many(models.Model):
@@ -39,4 +39,4 @@ class Many(models.Model):
     level_ones = models.ManyToManyField(LevelOne, blank=True, null=True, related_name="many")
 
     def __str__(self) -> str:
-        return f"Many(id={self.id}, name={self.name})"
+        return f"Many(id={self.pk}, name={self.name})"

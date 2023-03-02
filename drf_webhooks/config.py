@@ -31,4 +31,4 @@ class WebhooksConfig:
 
 conf = WebhooksConfig(**getattr(settings, 'WEBHOOKS', {}))
 
-REGISTERED_WEBHOOK_CHOICES = {}
+REGISTERED_WEBHOOK_CHOICES: dict[str, str] = {}

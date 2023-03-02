@@ -6,7 +6,6 @@ from typing import (
     Callable,
     DefaultDict,
     Hashable,
-    Iterable,
     Literal,
     NamedTuple,
     Type,
@@ -72,7 +71,7 @@ class ModelSerializerWebhook:
         if not self.base_name:
             self.base_name = underscore(model.__name__)
 
-        self.nested_serializers = tuple(self._find_nested_model_serializers(self.serializer_class(), tuple()))
+        self.nested_serializers = tuple(self._find_nested_model_serializers(self.serializer_class(), []))
         self.nested_serializers_map = {m: s for m, s, _ in self.nested_serializers}
 
         _getters = self.get_signal_model_instance_base_getters()
@@ -106,7 +105,7 @@ class ModelSerializerWebhook:
 
     def _register_choice(self, name: WebhookCUD):
         REGISTERED_WEBHOOK_CHOICES[f'{self.base_name}.{name}'] = "%s %s" % (
-            self.model._meta.verbose_name.title(),
+            self.model._meta.verbose_name.title(),  # type: ignore
             name.title(),
         )
 
@@ -139,7 +138,7 @@ class ModelSerializerWebhook:
             return
 
         webhook_ids = conf.WEBHOOK_MODEL.objects.filter(
-            **{conf.OWNER_FIELD: owner.id},
+            **{conf.OWNER_FIELD: owner.pk},
             events__contains=[event],
         ).values_list('id', flat=True)
 
@@ -149,7 +148,7 @@ class ModelSerializerWebhook:
                 args=(
                     str(webhook_id),
                     event,
-                    owner.id,
+                    owner.pk,
                     str(instance.pk),
                     self.serializer_module_path if cud != "deleted" else None,
                     self.json_renderer_class,
@@ -170,13 +169,13 @@ class ModelSerializerWebhook:
         return self._dispatch(instance, 'deleted')
 
     @classmethod
-    def _find_nested_model_serializers(cls, serializer: serializers.ModelSerializer, path: tuple[str]):
+    def _find_nested_model_serializers(cls, serializer: serializers.ModelSerializer, path: list[str]):
         for key, field in serializer.fields.items():
             if isinstance(field, serializers.ListSerializer):
                 field = field.child
             if isinstance(field, serializers.ModelSerializer):
                 yield (field.Meta.model, field, (*path, key))
-                yield from cls._find_nested_model_serializers(field, (*path, key))
+                yield from cls._find_nested_model_serializers(field, [*path, key])
 
     @staticmethod
     def _base_getter_factory(q: set[str]):
@@ -261,7 +260,7 @@ def register_webhook(serializer_class: Type[serializers.ModelSerializer]):
             raise RuntimeError(f'ModelSerializerWebhook with base_name="{msw.base_name}" already registered')
 
         msw._register_all_choices()
-        instances[msw] = msw
+        instances[msw.serializer_class] = msw
         base_names.add(msw.base_name)
 
         return msw
