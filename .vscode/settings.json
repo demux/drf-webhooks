@@ -15,5 +15,9 @@
       "source.organizeImports": true
     }
   },
-  "isort.args": ["--profile", "black"]
+  "isort.args": [
+    "--profile",
+    "black"
+  ],
+  "esbonio.sphinx.confDir": ""
 }
